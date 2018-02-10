@@ -1,0 +1,8 @@
+{
+	"name": "dpar-bot-discord",
+	"version": "1.0.0",
+	"description": "DPAR bot for Discord ",
+	"main": "bot.js",
+	"author": "Hikryon - Iván Viguera Cáceres",
+	"dependencies": {}
+}
