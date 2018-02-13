@@ -6,6 +6,8 @@
 	"author": "Hikryon - Iván Viguera Cáceres",
 	"dependencies": {
 		"discord.io": "github:woor/discord.io#gateway_v6",
+		"eve-sso-simple": "^2.0.1",
+		"express": "^4.16.2",
 		"winston": "^2.4.0"
 	}
 }
