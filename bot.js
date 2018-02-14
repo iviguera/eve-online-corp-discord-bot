@@ -107,7 +107,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
         console.log('Intentos: ' + intentos);
         var mensajes = [':see_no_evil:', '¿A la 3a va la vencida?'];
         sendMessages(channelID,
-            mensajes[intentos],
+            [mensajes[intentos]],
             500);
         intentos++;
     }
