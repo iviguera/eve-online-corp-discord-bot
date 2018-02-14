@@ -12,9 +12,15 @@ var app = express();
 
 //https://www.npmjs.com/package/eve-sso-simple
 var esso = require('eve-sso-simple');
+
 var eve_scopes = 'esi-wallet.read_corporation_wallet.v1 esi-killmails.read_corporation_killmails.v1 esi-wallet.read_corporation_wallets.v1 esi-bookmarks.read_corporation_bookmarks.v1';
-var eve_access_token = null;
-var eve_character_token = null;
+var eve_corp_user = {
+    tokens: null,
+    auth_info: null
+};
+var eve_functions = {
+    killboard: require('./eve-functions/killboard')
+};
 
 // Configure logger settings
 logger.remove(logger.transports.Console);
@@ -22,6 +28,7 @@ logger.add(logger.transports.Console, {
     colorize: true
 });
 logger.level = 'debug';
+
 // Initialize Discord Bot
 var bot = new Discord.Client({
     token: auth.token,
@@ -32,40 +39,82 @@ bot.on('ready', function (evt) {
     logger.info('Logged in as: ');
     logger.info(bot.username + ' - (' + bot.id + ')');
 });
+var intentos = 0;
 bot.on('message', function (user, userID, channelID, message, evt) {
     // Our bot needs to know if it will execute a command
     // It will listen for messages that will start with `!`
-    if (message.substring(0, 1) == '!') {
-        var args = message.substring(1).split(' ');
-        var cmd = args[0];
 
-        args = args.splice(1);
-        switch (cmd) {
-            // !ping
-            case 'ping':
-                bot.sendMessage({
-                    to: channelID,
-                    message: 'Pong!'
-                });
-                break;
-            // Just add any case commands if you want to..
-            case 'kills':
-                var kills = [];
-                if(eve_access_token != null) {
-                    kills = getKills(args);
-                    sendMessages(channelID , kills, 1000);
-                } else {
-                    var message = 'Error access';
+    logger.info('User: ' + user + ' con id ' + userID);
+
+    //pequeña trolleada, quitarla mañana xd
+    if(user != 'I3lack Knight' || intentos >= 1) {
+        if (message.substring(0, 1) == '!') {
+            var args = message.substring(1).split(' ');
+            var cmd = args[0];
+            args = args.splice(1);
+            switch (cmd) {
+                // !ping
+                case 'ping':
                     bot.sendMessage({
                         to: channelID,
-                        message: message
+                        message: 'Pong!'
                     });
-                }
-                break;
+                    break;
+                // Just add any case commands if you want to..
+                case 'dpar-killboard':
+                    if (eve_corp_user.tokens != null) {
+                        sendMessages(channelID,
+                            eve_functions.killboard.getCorporationKills(args),
+                            1000);
+                    } else {
+                        var message = 'Error access';
+                        bot.sendMessage({
+                            to: channelID,
+                            message: message
+                        });
+                    }
+                    break;
+                case 'check-killboard':
+                    if(args.length >= 1) {
+                        eve_functions.killboard.getLastPilotKills(args, function(response) {
+                            "use strict";
+                            sendMessages(channelID,
+                                response,
+                                500);
+                        });
+                    } else {
+                        var response = [];
+                        response.push('Error: Insuficientes argumentos.');
+                        response.push('!help');
+                        sendMessages(channelID,
+                            response,
+                            500);
+                    }
+                    break;
+                case 'help':
+                    var command_list = [
+                        'Lista de comandos:',
+                        '!ping -> juega al ping-pong con el bot.',
+                        '!check-killboard character_name [kills_to_show] -> muestra por defecto las últimas 5 entradas de zkillboard de character_name'
+                    ];
+                    sendMessages(channelID,
+                        command_list,
+                        1000);
+                    break;
+            }
         }
+    } else {
+        console.log('Intentos: ' + intentos);
+        var mensajes = [':see_no_evil:', '¿A la 3a va la vencida?'];
+        sendMessages(channelID,
+            mensajes[intentos],
+            500);
+        intentos++;
     }
 });
 
+
+//Init http server for login petitions and refresh tokens
 app.get('/', (req, res) => {
     esso.login(
         {
@@ -75,7 +124,6 @@ app.get('/', (req, res) => {
             scope: eve_scopes
         }, res);
 });
-
 app.get('/callback', (req, res) => {
     // Returns a promise - resolves into a JSON object containing access and character token.
     esso.getTokens({
@@ -83,37 +131,36 @@ app.get('/callback', (req, res) => {
             client_secret: auth.ëve_secret_key
         }, req, res,
         (accessToken, charToken) => {
-            eve_access_token = accessToken;
-            eve_character_token = charToken;
-            res.send({access_token: eve_access_token, character_token: eve_character_token})
+            eve_corp_user.tokens = accessToken;
+            eve_corp_user.auth_info = charToken;
+            res.send({eve_corp_user: eve_corp_user})
         }
     );
 });
-
 app.listen(3000, function () {
-    console.log('Example app listening on port 3000!');
+    console.log('Listening on port 3000!');
 });
-
-function getKills(args) {
-    "use strict";
-
-    return [1,2,3,4,5];
-}
 
 //https://github.com/izy521/discord.io/blob/master/example.js
 /*Function declaration area*/
 function sendMessages(ID, messageArr, interval) {
     var resArr = [], len = messageArr.length;
-    var callback = typeof(arguments[2]) === 'function' ?  arguments[2] :  arguments[3];
+    var callback = typeof(arguments[2]) === 'function' ? arguments[2] : arguments[3];
     if (typeof(interval) !== 'number') interval = 1000;
 
     function _sendMessages() {
-        setTimeout(function() {
+        setTimeout(function () {
             if (messageArr[0]) {
-                bot.sendMessage({
+                var input = {
                     to: ID,
-                    message: messageArr.shift()
-                }, function(err, res) {
+                };
+                var actual_item = messageArr.shift();
+                if(actual_item.hasOwnProperty('embed')) {
+                    input.embed   = actual_item.embed;
+                } else {
+                    input.message = actual_item;
+                }
+                bot.sendMessage(input, function (err, res) {
                     resArr.push(err || res);
                     if (resArr.length === len) if (typeof(callback) === 'function') callback(resArr);
                 });
@@ -121,5 +168,6 @@ function sendMessages(ID, messageArr, interval) {
             }
         }, interval);
     }
+
     _sendMessages();
 }
